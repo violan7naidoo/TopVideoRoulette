@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35931.197 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestHarnessV2", "TestHarnessV2\TestHarnessV2.csproj", "{9A670510-C3C2-4184-B3F1-FBCBFEA5993A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9A670510-C3C2-4184-B3F1-FBCBFEA5993A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9A670510-C3C2-4184-B3F1-FBCBFEA5993A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9A670510-C3C2-4184-B3F1-FBCBFEA5993A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9A670510-C3C2-4184-B3F1-FBCBFEA5993A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {DC872E1E-03A6-4429-9113-6E0E7BE46414}
+	EndGlobalSection
+EndGlobal
