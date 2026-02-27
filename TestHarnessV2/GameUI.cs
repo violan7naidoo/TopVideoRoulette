@@ -3,7 +3,6 @@ using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 
@@ -16,14 +15,14 @@ namespace TestHarnessV2
 
         static Logger()
         {
-            string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            string logsFolder = Path.Combine(desktopPath, "Game-logs");
+            string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            string logsFolder = Path.Combine(documentsPath, "Game-logs");
             try
             {
                 if (!Directory.Exists(logsFolder))
                     Directory.CreateDirectory(logsFolder);
             }
-            catch { logsFolder = desktopPath; }
+            catch { logsFolder = documentsPath; }
 
             string fileName = $"GameUI_Log_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
             string logPath = Path.Combine(logsFolder, fileName);
@@ -36,7 +35,7 @@ namespace TestHarnessV2
             {
                 try
                 {
-                    logPath = Path.Combine(desktopPath, fileName);
+                    logPath = Path.Combine(documentsPath, fileName);
                     System.IO.File.WriteAllText(logPath, $"=== GameUI Log Started at {DateTime.Now:yyyy-MM-dd HH:mm:ss} ===\r\n\r\n", Encoding.UTF8);
                     LogFilePath = logPath;
                 }
@@ -82,53 +81,67 @@ namespace TestHarnessV2
         private const uint SWP_SHOWWINDOW = 0x0040;
 
         private const string GameUrl = "https://stagingretail.gameonstudios.bet/";
-        private readonly Video _video;
-        private bool _pageLoadDone;
+        private const double WindowScale = 1.0; // 100% full screen
+        private const double DefaultZoomFactor = 0.6; // 60% zoom out by default (match browser zoom-out on large TV)
+        private const int CacheClearIntervalMs = 2 * 60 * 60 * 1000; // 2 hours
+        private System.Windows.Forms.Timer _cacheClearTimer;
 
         public GameUI2()
         {
             InitializeComponent();
-            _video = new Video(webView_Main);
 
             try { this.Icon = new Icon(Path.Combine(Application.StartupPath, "images", "gameonstudios.ico")); } catch { }
             this.ShowIcon = true;
             this.ShowInTaskbar = true;
 
             var screen = Screen.PrimaryScreen;
+            int w = (int)(screen.Bounds.Width * WindowScale);
+            int h = (int)(screen.Bounds.Height * WindowScale);
+            int x = (screen.Bounds.Width - w) / 2;
+            int y = (screen.Bounds.Height - h) / 2;
+
             this.FormBorderStyle = FormBorderStyle.None;
             this.WindowState = FormWindowState.Normal;
             this.StartPosition = FormStartPosition.Manual;
             this.TopMost = false;
             this.Padding = new Padding(0);
             this.Margin = new Padding(0);
-            this.Bounds = screen.Bounds;
-            this.Location = new Point(0, 0);
-            this.Size = screen.Bounds.Size;
+            this.Bounds = new Rectangle(x, y, w, h);
+            this.Location = new Point(x, y);
+            this.Size = new Size(w, h);
 
             this.Load += GameUI2_Load;
             this.Resize += GameUI2_Resize;
             this.Shown += GameUI2_Shown;
 
-            Logger.Log("=== Video fullscreen app started ===");
+            Logger.Log("Fullscreen app started – loading " + GameUrl);
         }
 
         private void GameUI2_Load(object sender, EventArgs e)
         {
             var screen = Screen.PrimaryScreen;
+            int w = (int)(screen.Bounds.Width * WindowScale);
+            int h = (int)(screen.Bounds.Height * WindowScale);
+            int x = (screen.Bounds.Width - w) / 2;
+            int y = (screen.Bounds.Height - h) / 2;
             IntPtr handle = this.Handle;
             SetWindowLong(handle, GWL_STYLE, WS_POPUP | WS_VISIBLE);
-            SetWindowPos(handle, HWND_TOP, 0, 0, screen.Bounds.Width, screen.Bounds.Height, SWP_SHOWWINDOW);
-            this.Bounds = screen.Bounds;
+            SetWindowPos(handle, HWND_TOP, x, y, w, h, SWP_SHOWWINDOW);
+            this.Bounds = new Rectangle(x, y, w, h);
         }
 
         private void GameUI2_Shown(object sender, EventArgs e)
         {
             var screen = Screen.PrimaryScreen;
-            this.Bounds = screen.Bounds;
-            this.Location = new Point(0, 0);
+            int w = (int)(screen.Bounds.Width * WindowScale);
+            int h = (int)(screen.Bounds.Height * WindowScale);
+            int x = (screen.Bounds.Width - w) / 2;
+            int y = (screen.Bounds.Height - h) / 2;
+            this.Bounds = new Rectangle(x, y, w, h);
+            this.Location = new Point(x, y);
             if (webView_Main != null)
             {
-                webView_Main.Size = new Size(screen.Bounds.Width, screen.Bounds.Height);
+                webView_Main.Size = new Size(w, h);
                 webView_Main.Location = new Point(0, 0);
             }
         }
@@ -137,7 +150,9 @@ namespace TestHarnessV2
         {
             if (webView_Main == null) return;
             var screen = Screen.PrimaryScreen;
-            var newSize = new Size(screen.Bounds.Width, screen.Bounds.Height);
+            int w = (int)(screen.Bounds.Width * WindowScale);
+            int h = (int)(screen.Bounds.Height * WindowScale);
+            var newSize = new Size(w, h);
             var newLoc = new Point(0, 0);
             if (webView_Main.Size != newSize || webView_Main.Location != newLoc)
             {
@@ -169,19 +184,32 @@ namespace TestHarnessV2
                 var settings = coreWebView2.Settings;
                 settings.IsScriptEnabled = true;
                 settings.IsStatusBarEnabled = false;
-                settings.IsZoomControlEnabled = false;
+                settings.IsZoomControlEnabled = true;
                 settings.AreDefaultContextMenusEnabled = false;
                 coreWebView2.ContextMenuRequested += (s, e) => e.Handled = true;
 
-                var screen = Screen.PrimaryScreen;
-                webView_Main.Size = new Size(screen.Bounds.Width, screen.Bounds.Height);
-                webView_Main.Location = new Point(0, 0);
-                webView_Main.ZoomFactor = 1.0;
-
+                // Apply default zoom after page loads so URL scale/sizing is applied first (like browser)
                 coreWebView2.NavigationCompleted += OnNavigationCompleted;
 
-                Logger.Log("[INIT] Loading game URL (fullscreen video): " + GameUrl);
+                // Clear disk cache so it does not slow down the app
+                await coreWebView2.Profile.ClearBrowsingDataAsync(
+                    CoreWebView2BrowsingDataKinds.DiskCache,
+                    DateTime.Now.AddYears(-10),
+                    DateTime.Now);
+
+                var screen = Screen.PrimaryScreen;
+                int w = (int)(screen.Bounds.Width * WindowScale);
+                int h = (int)(screen.Bounds.Height * WindowScale);
+                webView_Main.Size = new Size(w, h);
+                webView_Main.Location = new Point(0, 0);
+
                 webView_Main.Source = new Uri(GameUrl);
+
+                // Clear cache every 2 hours
+                _cacheClearTimer = new System.Windows.Forms.Timer();
+                _cacheClearTimer.Interval = CacheClearIntervalMs;
+                _cacheClearTimer.Tick += CacheClearTimer_Tick;
+                _cacheClearTimer.Start();
             }
             catch (Exception ex)
             {
@@ -189,54 +217,32 @@ namespace TestHarnessV2
             }
         }
 
-        private async void OnNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
+        private void OnNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
         {
             if (!e.IsSuccess || webView_Main?.CoreWebView2 == null) return;
-            if (_pageLoadDone)
-            {
-                Logger.Log("[NAV] Subsequent navigation, skipping re-init");
-                return;
-            }
-            _pageLoadDone = true;
-
-            var coreWebView2 = webView_Main.CoreWebView2;
             try
             {
-                _video.AttachRequestInterception(coreWebView2);
-                Logger.Log("[INIT] Video request interception attached (same as reference project)");
+                webView_Main.ZoomFactor = DefaultZoomFactor;
+            }
+            catch { /* ignore */ }
+        }
 
-                int w = Screen.PrimaryScreen.Bounds.Width;
-                int h = Screen.PrimaryScreen.Bounds.Height;
-                string fullscreenScript = @"
-(function() {
-    function makeFullscreen(v) {
-        if (!v || v.dataset.fullscreenDone) return;
-        v.style.setProperty('position', 'fixed', 'important');
-        v.style.setProperty('top', '0', 'important');
-        v.style.setProperty('left', '0', 'important');
-        v.style.setProperty('width', '100%', 'important');
-        v.style.setProperty('height', '100%', 'important');
-        v.style.setProperty('object-fit', 'contain', 'important');
-        v.style.setProperty('z-index', '99999', 'important');
-        v.dataset.fullscreenDone = '1';
-    }
-    var style = document.createElement('style');
-    style.id = 'fullscreen-video-override';
-    style.textContent = 'video{position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;object-fit:contain!important;z-index:99999!important;background:#000!important}html,body{background:#000!important;overflow:hidden!important}';
-    if (!document.getElementById('fullscreen-video-override')) document.head.appendChild(style);
-    document.querySelectorAll('video').forEach(makeFullscreen);
-    var obs = new MutationObserver(function(mutations) {
-        document.querySelectorAll('video').forEach(makeFullscreen);
-    });
-    obs.observe(document.body, { childList: true, subtree: true });
-})();
-";
-                await coreWebView2.ExecuteScriptAsync(fullscreenScript);
-                Logger.Log("[INIT] Fullscreen video CSS injected");
+        private async void CacheClearTimer_Tick(object sender, EventArgs e)
+        {
+            try
+            {
+                var coreWebView2 = webView_Main?.CoreWebView2;
+                if (coreWebView2 == null) return;
+
+                await coreWebView2.Profile.ClearBrowsingDataAsync(
+                    CoreWebView2BrowsingDataKinds.DiskCache,
+                    DateTime.Now.AddYears(-10),
+                    DateTime.Now);
+                Logger.Log("[CACHE] Cleared disk cache (scheduled 2-hour clear)");
             }
             catch (Exception ex)
             {
-                Logger.LogError("[INIT] OnNavigationCompleted: " + ex.Message, ex);
+                Logger.LogError("[CACHE] Error clearing cache: " + ex.Message, ex);
             }
         }
     }
