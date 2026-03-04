@@ -82,13 +82,17 @@ namespace TestHarnessV2
 
         private const string GameUrl = "https://stagingretail.gameonstudios.bet/";
         private const double WindowScale = 1.0; // 100% full screen
-        private const double DefaultZoomFactor = 0.6; // 60% zoom out by default (match browser zoom-out on large TV)
+        private const double DefaultZoomFactor = 1.0; // default zoom (from logs / Ctrl+scroll)
         private const int CacheClearIntervalMs = 2 * 60 * 60 * 1000; // 2 hours
         private System.Windows.Forms.Timer _cacheClearTimer;
+        private System.Windows.Forms.Timer _zoomLogTimer;
+        private double _lastLoggedZoomFactor = double.NaN;
+        private readonly Video _video;
 
         public GameUI2()
         {
             InitializeComponent();
+            _video = new Video(webView_Main);
 
             try { this.Icon = new Icon(Path.Combine(Application.StartupPath, "images", "gameonstudios.ico")); } catch { }
             this.ShowIcon = true;
@@ -115,6 +119,7 @@ namespace TestHarnessV2
             this.Shown += GameUI2_Shown;
 
             Logger.Log("Fullscreen app started – loading " + GameUrl);
+            Logger.Log("Log file (open this file to see video request/serve details): " + Logger.GetLogFilePath());
         }
 
         private void GameUI2_Load(object sender, EventArgs e)
@@ -191,6 +196,9 @@ namespace TestHarnessV2
                 // Apply default zoom after page loads so URL scale/sizing is applied first (like browser)
                 coreWebView2.NavigationCompleted += OnNavigationCompleted;
 
+                // Intercept localhost:5005/Videos/ and serve from local Video folder (with logging)
+                _video.AttachRequestInterception(coreWebView2);
+
                 // Clear disk cache so it does not slow down the app
                 await coreWebView2.Profile.ClearBrowsingDataAsync(
                     CoreWebView2BrowsingDataKinds.DiskCache,
@@ -210,6 +218,12 @@ namespace TestHarnessV2
                 _cacheClearTimer.Interval = CacheClearIntervalMs;
                 _cacheClearTimer.Tick += CacheClearTimer_Tick;
                 _cacheClearTimer.Start();
+
+                // Poll zoom once per second and log when it changes (user zooms in/out)
+                _zoomLogTimer = new System.Windows.Forms.Timer();
+                _zoomLogTimer.Interval = 1000;
+                _zoomLogTimer.Tick += ZoomLogTimer_Tick;
+                _zoomLogTimer.Start();
             }
             catch (Exception ex)
             {
@@ -223,6 +237,13 @@ namespace TestHarnessV2
             try
             {
                 webView_Main.ZoomFactor = DefaultZoomFactor;
+                _lastLoggedZoomFactor = webView_Main.ZoomFactor;
+
+                var screenInfo = Screen.PrimaryScreen;
+                Logger.Log(
+                    $"[ZOOM] Initial default zoom applied => {webView_Main.ZoomFactor:F3}, " +
+                    $"WebViewSize={webView_Main.Size.Width}x{webView_Main.Size.Height}, " +
+                    $"Screen={screenInfo.Bounds.Width}x{screenInfo.Bounds.Height}");
             }
             catch { /* ignore */ }
         }
@@ -243,6 +264,29 @@ namespace TestHarnessV2
             catch (Exception ex)
             {
                 Logger.LogError("[CACHE] Error clearing cache: " + ex.Message, ex);
+            }
+        }
+
+        private void ZoomLogTimer_Tick(object sender, EventArgs e)
+        {
+            try
+            {
+                if (webView_Main?.CoreWebView2 == null) return;
+
+                double current = webView_Main.ZoomFactor;
+                if (double.IsNaN(_lastLoggedZoomFactor) || Math.Abs(current - _lastLoggedZoomFactor) > 0.0001)
+                {
+                    _lastLoggedZoomFactor = current;
+                    var screenInfo = Screen.PrimaryScreen;
+                    Logger.Log(
+                        $"[ZOOM] ZoomFactor={current:F3}, " +
+                        $"WebViewSize={webView_Main.Size.Width}x{webView_Main.Size.Height}, " +
+                        $"Screen={screenInfo.Bounds.Width}x{screenInfo.Bounds.Height}");
+                }
+            }
+            catch
+            {
+                // ignore logging failures
             }
         }
     }
