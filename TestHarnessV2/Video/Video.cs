@@ -16,24 +16,46 @@ namespace TestHarnessV2
         private readonly string[] _allowedRoots;
         private readonly Microsoft.Web.WebView2.WinForms.WebView2 _webView;
 
+        // Track recent relative paths to detect loops (same video over and over).
+        private const int RecentHistorySize = 20;
+        private readonly Queue<string> _recentRelativePaths = new Queue<string>(RecentHistorySize);
+        private DateTime _lastLoopWarningUtc = DateTime.MinValue;
+
         public Video(Microsoft.Web.WebView2.WinForms.WebView2 webView)
         {
             _webView = webView ?? throw new ArgumentNullException(nameof(webView));
 
-            // Search paths for local videos.
-            // - App-relative: .\Videos\TopView, .\Videos\SideView, .\Videos\Oblique View, .\Videos\ObliqueView
-            // - Absolute: D:\Users\saleesha\Desktop\Videos\{TopView,SideView,Oblique View,ObliqueView}
-            _localVideoFolders = new[]
+            // Build search paths for local videos from config.
+            // - Relative paths are combined with Application.StartupPath.
+            // - Absolute paths (e.g. D:\...) are used as-is.
+            var roots = new List<string>();
+            foreach (var root in AppConfig.Current.VideoRoots)
             {
-                Path.Combine(Application.StartupPath, "Videos", "TopView"),
-                Path.Combine(Application.StartupPath, "Videos", "SideView"),
-                Path.Combine(Application.StartupPath, "Videos", "Oblique View"),
-                Path.Combine(Application.StartupPath, "Videos", "ObliqueView"),
-                @"D:\Users\saleesha\Desktop\Videos\TopView",
-                @"D:\Users\saleesha\Desktop\Videos\SideView",
-                @"D:\Users\saleesha\Desktop\Videos\Oblique View",
-                @"D:\Users\saleesha\Desktop\Videos\ObliqueView"
-            };
+                if (string.IsNullOrWhiteSpace(root)) continue;
+                try
+                {
+                    string full =
+                        Path.IsPathRooted(root)
+                            ? root
+                            : Path.Combine(Application.StartupPath, root);
+                    roots.Add(full);
+                }
+                catch
+                {
+                    // Ignore bad entries
+                }
+            }
+
+            if (roots.Count == 0)
+            {
+                // Fallback to legacy defaults if config is empty
+                roots.Add(Path.Combine(Application.StartupPath, "Videos", "TopView"));
+                roots.Add(Path.Combine(Application.StartupPath, "Videos", "SideView"));
+                roots.Add(Path.Combine(Application.StartupPath, "Videos", "Oblique View"));
+                roots.Add(Path.Combine(Application.StartupPath, "Videos", "ObliqueView"));
+            }
+
+            _localVideoFolders = roots.ToArray();
 
             _allowedRoots = new string[_localVideoFolders.Length];
             for (int i = 0; i < _localVideoFolders.Length; i++)
@@ -81,6 +103,9 @@ namespace TestHarnessV2
 
                 Logger.Log($"[VIDEO] Extracted path: {relativePath}");
 
+                // Update recent-paths history and detect potential loops.
+                UpdateRecentPathsAndDetectLoop(relativePath);
+
                 string resolvedPath = ResolveToLocalFile(relativePath);
                 if (resolvedPath == null)
                 {
@@ -99,6 +124,47 @@ namespace TestHarnessV2
             catch (Exception ex)
             {
                 Logger.LogError($"[VIDEO] Error handling request: {e.Request.Uri}", ex);
+            }
+        }
+
+        private void UpdateRecentPathsAndDetectLoop(string relativePath)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(relativePath)) return;
+
+                // Maintain fixed-size queue of last N relative paths.
+                _recentRelativePaths.Enqueue(relativePath);
+                while (_recentRelativePaths.Count > RecentHistorySize)
+                    _recentRelativePaths.Dequeue();
+
+                // Only start checking when we have a full window.
+                if (_recentRelativePaths.Count < RecentHistorySize) return;
+
+                string latest = relativePath;
+                int sameCount = 0;
+                foreach (var p in _recentRelativePaths)
+                {
+                    if (string.Equals(p, latest, StringComparison.OrdinalIgnoreCase))
+                        sameCount++;
+                }
+
+                // If 15 or more of the last 20 are the same, and we haven't warned recently, log a warning.
+                const int LoopThreshold = 15;
+                if (sameCount >= LoopThreshold)
+                {
+                    var nowUtc = DateTime.UtcNow;
+                    // Avoid spamming: only log once every 5 minutes for the same pattern.
+                    if ((nowUtc - _lastLoopWarningUtc).TotalMinutes >= 5)
+                    {
+                        _lastLoopWarningUtc = nowUtc;
+                        Logger.Log($"[WARN][VIDEO-LOOP] Possible video loop detected: path='{latest}' occurred {sameCount}/{RecentHistorySize} recent requests.");
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore loop-detection failures; they should never break serving.
             }
         }
 

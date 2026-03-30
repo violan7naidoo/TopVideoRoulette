@@ -1,0 +1,15 @@
+{
+  "GameUrl": "https://stagingretail.gameonstudios.bet/",
+  "DefaultZoomFactor": 1.0,
+  "VideoRoots": [
+    "Videos\\TopView",
+    "Videos\\SideView",
+    "Videos\\Oblique View",
+    "Videos\\ObliqueView",
+    "D:\\Users\\saleesha\\Desktop\\Videos\\TopView",
+    "D:\\Users\\saleesha\\Desktop\\Videos\\SideView",
+    "D:\\Users\\saleesha\\Desktop\\Videos\\Oblique View",
+    "D:\\Users\\saleesha\\Desktop\\Videos\\ObliqueView"
+  ]
+}
+

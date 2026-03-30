@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -74,18 +75,35 @@ namespace TestHarnessV2
         [DllImport("user32.dll")]
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private struct MEMORYSTATUSEX
+        {
+            public uint dwLength;
+            public uint dwMemoryLoad;
+            public ulong ullTotalPhys;
+            public ulong ullAvailPhys;
+            public ulong ullTotalPageFile;
+            public ulong ullAvailPageFile;
+            public ulong ullTotalVirtual;
+            public ulong ullAvailVirtual;
+            public ulong ullAvailExtendedVirtual;
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
+
         private const int GWL_STYLE = -16;
         private const uint WS_POPUP = 0x80000000;
         private const uint WS_VISIBLE = 0x10000000;
         private static readonly IntPtr HWND_TOP = new IntPtr(0);
         private const uint SWP_SHOWWINDOW = 0x0040;
 
-        private const string GameUrl = "https://stagingretail.gameonstudios.bet/";
         private const double WindowScale = 1.0; // 100% full screen
-        private const double DefaultZoomFactor = 1.0; // default zoom (from logs / Ctrl+scroll)
         private const int CacheClearIntervalMs = 2 * 60 * 60 * 1000; // 2 hours
+        private const int HealthLogIntervalMs = 15 * 60 * 1000; // 15 minutes
         private System.Windows.Forms.Timer _cacheClearTimer;
         private System.Windows.Forms.Timer _zoomLogTimer;
+        private System.Windows.Forms.Timer _healthLogTimer;
         private double _lastLoggedZoomFactor = double.NaN;
         private readonly Video _video;
 
@@ -118,7 +136,7 @@ namespace TestHarnessV2
             this.Resize += GameUI2_Resize;
             this.Shown += GameUI2_Shown;
 
-            Logger.Log("Fullscreen app started – loading " + GameUrl);
+            Logger.Log("Fullscreen app started – loading " + AppConfig.Current.GameUrl);
             Logger.Log("Log file (open this file to see video request/serve details): " + Logger.GetLogFilePath());
         }
 
@@ -211,7 +229,7 @@ namespace TestHarnessV2
                 webView_Main.Size = new Size(w, h);
                 webView_Main.Location = new Point(0, 0);
 
-                webView_Main.Source = new Uri(GameUrl);
+                webView_Main.Source = new Uri(AppConfig.Current.GameUrl);
 
                 // Clear cache every 2 hours
                 _cacheClearTimer = new System.Windows.Forms.Timer();
@@ -224,6 +242,12 @@ namespace TestHarnessV2
                 _zoomLogTimer.Interval = 1000;
                 _zoomLogTimer.Tick += ZoomLogTimer_Tick;
                 _zoomLogTimer.Start();
+
+                // Log basic health (memory, handles, zoom) every 15 minutes
+                _healthLogTimer = new System.Windows.Forms.Timer();
+                _healthLogTimer.Interval = HealthLogIntervalMs;
+                _healthLogTimer.Tick += HealthLogTimer_Tick;
+                _healthLogTimer.Start();
             }
             catch (Exception ex)
             {
@@ -236,7 +260,7 @@ namespace TestHarnessV2
             if (!e.IsSuccess || webView_Main?.CoreWebView2 == null) return;
             try
             {
-                webView_Main.ZoomFactor = DefaultZoomFactor;
+                webView_Main.ZoomFactor = AppConfig.Current.DefaultZoomFactor;
                 _lastLoggedZoomFactor = webView_Main.ZoomFactor;
 
                 var screenInfo = Screen.PrimaryScreen;
@@ -287,6 +311,50 @@ namespace TestHarnessV2
             catch
             {
                 // ignore logging failures
+            }
+        }
+
+        private void HealthLogTimer_Tick(object sender, EventArgs e)
+        {
+            try
+            {
+                string systemRamPart = "SystemRAM=n/a";
+                var mem = new MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>() };
+                if (GlobalMemoryStatusEx(ref mem))
+                {
+                    double totalMb = mem.ullTotalPhys / (1024.0 * 1024.0);
+                    double availMb = mem.ullAvailPhys / (1024.0 * 1024.0);
+                    // dwMemoryLoad: Windows approximate % of physical RAM in use (similar to Task Manager overview)
+                    uint inUsePct = mem.dwMemoryLoad;
+                    double usedFromAvailPct = totalMb > 0.01
+                        ? 100.0 * (1.0 - (availMb / totalMb))
+                        : 0;
+                    systemRamPart =
+                        $"SystemRAM Available={availMb:F0}MB / Total={totalMb:F0}MB, " +
+                        $"InUse~{inUsePct}% (Windows MemoryLoad), UsedFromAvail~{usedFromAvailPct:F0}%";
+                }
+
+                using (var proc = Process.GetCurrentProcess())
+                {
+                    double workingSetMb = proc.WorkingSet64 / (1024.0 * 1024.0);
+                    double privateMb = proc.PrivateMemorySize64 / (1024.0 * 1024.0);
+                    int handleCount = proc.HandleCount;
+                    int threadCount = proc.Threads.Count;
+
+                    double zoom = webView_Main?.ZoomFactor ?? double.NaN;
+                    var screenInfo = Screen.PrimaryScreen;
+
+                    Logger.Log(
+                        $"[HEALTH] Process WorkingSet={workingSetMb:F1}MB, PrivateMem={privateMb:F1}MB, " +
+                        $"{systemRamPart}, " +
+                        $"Handles={handleCount}, Threads={threadCount}, " +
+                        $"ZoomFactor={(double.IsNaN(zoom) ? -1.0 : zoom):F3}, " +
+                        $"Screen={screenInfo.Bounds.Width}x{screenInfo.Bounds.Height}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("[HEALTH] Failed to log health snapshot.", ex);
             }
         }
     }
