@@ -11,15 +11,45 @@ namespace TestHarnessV2
         public string GameUrl { get; set; } = "https://stagingretail.gameonstudios.bet/";
         public double DefaultZoomFactor { get; set; } = 1.0;
         public List<string> VideoRoots { get; set; } = new();
+
+        /// <summary>When true, WebView Reload runs at each configured local time once per day.</summary>
+        public bool ScheduledUrlRefreshEnabled { get; set; } = true;
+
+        /// <summary>Local times of day as "HH:mm" (24h), e.g. "01:04", "07:15".</summary>
+        public List<string> ScheduledUrlRefreshTimes { get; set; } = new() { "01:04", "07:15" };
+
+        /// <summary>Refresh if now is in [scheduled, scheduled + this many minutes). Should be ≥ polling interval.</summary>
+        public int ScheduledUrlRefreshWindowMinutes { get; set; } = 2;
     }
 
     internal static class AppConfig
     {
-        private static readonly Lazy<AppSettings> _current = new Lazy<AppSettings>(Load, true);
+        private static readonly object _settingsLock = new object();
+        private static AppSettings _settings;
 
-        public static AppSettings Current => _current.Value;
+        public static AppSettings Current
+        {
+            get
+            {
+                lock (_settingsLock)
+                {
+                    if (_settings == null)
+                        _settings = LoadFromPath(logLoaded: true);
+                    return _settings;
+                }
+            }
+        }
 
-        private static AppSettings Load()
+        /// <summary>Re-reads settings.json and replaces the cached settings (quiet unless load fails).</summary>
+        public static void ReloadFromDisk()
+        {
+            lock (_settingsLock)
+            {
+                _settings = LoadFromPath(logLoaded: false);
+            }
+        }
+
+        private static AppSettings LoadFromPath(bool logLoaded)
         {
             try
             {
@@ -27,7 +57,8 @@ namespace TestHarnessV2
                 string configPath = Path.Combine(basePath, "settings.json");
                 if (!File.Exists(configPath))
                 {
-                    Logger.Log($"[CONFIG] settings.json not found at {configPath}, using built-in defaults.");
+                    if (logLoaded)
+                        Logger.Log($"[CONFIG] settings.json not found at {configPath}, using built-in defaults.");
                     return new AppSettings();
                 }
 
@@ -38,7 +69,8 @@ namespace TestHarnessV2
                 };
                 var settings = JsonSerializer.Deserialize<AppSettings>(json, options) ?? new AppSettings();
 
-                Logger.Log($"[CONFIG] Loaded settings from {configPath}");
+                if (logLoaded)
+                    Logger.Log($"[CONFIG] Loaded settings from {configPath}");
                 return settings;
             }
             catch (Exception ex)
@@ -49,4 +81,3 @@ namespace TestHarnessV2
         }
     }
 }
-

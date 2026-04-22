@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -101,11 +103,16 @@ namespace TestHarnessV2
         private const double WindowScale = 1.0; // 100% full screen
         private const int CacheClearIntervalMs = 2 * 60 * 60 * 1000; // 2 hours
         private const int HealthLogIntervalMs = 15 * 60 * 1000; // 15 minutes
+        private const int ScheduledUrlRefreshPollIntervalMs = 60 * 1000; // 1 minute — checks often enough to hit 01:04 / 07:15 closely
         private System.Windows.Forms.Timer _cacheClearTimer;
         private System.Windows.Forms.Timer _zoomLogTimer;
         private System.Windows.Forms.Timer _healthLogTimer;
+        private System.Windows.Forms.Timer _scheduledUrlRefreshTimer;
         private double _lastLoggedZoomFactor = double.NaN;
         private readonly Video _video;
+
+        private DateTime _scheduleRefreshFlagsDay = DateTime.MinValue.Date;
+        private readonly List<bool> _scheduleSlotRefreshedToday = new List<bool>();
 
         public GameUI2()
         {
@@ -248,10 +255,76 @@ namespace TestHarnessV2
                 _healthLogTimer.Interval = HealthLogIntervalMs;
                 _healthLogTimer.Tick += HealthLogTimer_Tick;
                 _healthLogTimer.Start();
+
+                // Daily scheduled full page reload (configurable times in settings.json)
+                _scheduledUrlRefreshTimer = new System.Windows.Forms.Timer();
+                _scheduledUrlRefreshTimer.Interval = ScheduledUrlRefreshPollIntervalMs;
+                _scheduledUrlRefreshTimer.Tick += ScheduledUrlRefreshTimer_Tick;
+                _scheduledUrlRefreshTimer.Start();
             }
             catch (Exception ex)
             {
                 Logger.LogError("Error initializing WebView2: " + ex.Message, ex);
+            }
+        }
+
+        private static bool TryParseLocalTimeOfDay(string text, out TimeSpan timeOfDay)
+        {
+            timeOfDay = default;
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            text = text.Trim();
+            if (TimeSpan.TryParseExact(text, @"hh\:mm", CultureInfo.InvariantCulture, out timeOfDay)) return true;
+            if (TimeSpan.TryParseExact(text, @"h\:mm", CultureInfo.InvariantCulture, out timeOfDay)) return true;
+            return false;
+        }
+
+        private void ScheduledUrlRefreshTimer_Tick(object sender, EventArgs e)
+        {
+            try
+            {
+                AppConfig.ReloadFromDisk();
+                var cfg = AppConfig.Current;
+                if (!cfg.ScheduledUrlRefreshEnabled) return;
+
+                var core = webView_Main?.CoreWebView2;
+                if (core == null) return;
+
+                var now = DateTime.Now;
+                var today = now.Date;
+                if (_scheduleRefreshFlagsDay != today)
+                {
+                    _scheduleRefreshFlagsDay = today;
+                    _scheduleSlotRefreshedToday.Clear();
+                }
+
+                var times = cfg.ScheduledUrlRefreshTimes;
+                if (times == null || times.Count == 0) return;
+
+                while (_scheduleSlotRefreshedToday.Count < times.Count)
+                    _scheduleSlotRefreshedToday.Add(false);
+                while (_scheduleSlotRefreshedToday.Count > times.Count)
+                    _scheduleSlotRefreshedToday.RemoveAt(_scheduleSlotRefreshedToday.Count - 1);
+
+                int windowMinutes = Math.Max(1, cfg.ScheduledUrlRefreshWindowMinutes);
+
+                for (int i = 0; i < times.Count; i++)
+                {
+                    if (_scheduleSlotRefreshedToday[i]) continue;
+                    if (!TryParseLocalTimeOfDay(times[i], out var tod)) continue;
+
+                    var start = today + tod;
+                    var end = start.AddMinutes(windowMinutes);
+                    if (now >= start && now < end)
+                    {
+                        core.Reload();
+                        _scheduleSlotRefreshedToday[i] = true;
+                        Logger.Log($"[SCHEDULE] WebView Reload for daily slot {i} ({times[i]} local), window={windowMinutes}m");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("[SCHEDULE] Scheduled URL refresh tick failed.", ex);
             }
         }
 

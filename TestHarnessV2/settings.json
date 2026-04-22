@@ -1,6 +1,9 @@
 {
   "GameUrl": "https://stagingretail.gameonstudios.bet/",
   "DefaultZoomFactor": 1.0,
+  "ScheduledUrlRefreshEnabled": true,
+  "ScheduledUrlRefreshTimes": [ "01:04", "07:15" ],
+  "ScheduledUrlRefreshWindowMinutes": 2,
   "VideoRoots": [
     "Videos\\TopView",
     "Videos\\SideView",
