@@ -8,9 +8,10 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
-using TestHarnessV2.Monitoring;
+using Microsoft.Web.WebView2.WinForms;
+using RouletteDisplay.Monitoring;
 
-namespace TestHarnessV2
+namespace RouletteDisplay
 {
     public static class Logger
     {
@@ -73,6 +74,9 @@ namespace TestHarnessV2
 
     public partial class GameUI2 : Form
     {
+        private Panel panel2 = null!;
+        private WebView2 webView_Main = null!;
+
         [DllImport("user32.dll")]
         private static extern int SetWindowLong(IntPtr hWnd, int nIndex, uint dwNewLong);
         [DllImport("user32.dll")]
@@ -115,6 +119,49 @@ namespace TestHarnessV2
 
         private DateTime _scheduleRefreshFlagsDay = DateTime.MinValue.Date;
         private readonly List<bool> _scheduleSlotRefreshedToday = new List<bool>();
+
+        private void InitializeComponent()
+        {
+            panel2 = new Panel();
+            webView_Main = new WebView2();
+
+            panel2.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)webView_Main).BeginInit();
+            SuspendLayout();
+
+            panel2.Controls.Add(webView_Main);
+            panel2.Dock = DockStyle.Fill;
+            panel2.Location = new Point(0, 0);
+            panel2.Margin = new Padding(0);
+            panel2.Name = "panel2";
+            panel2.Padding = new Padding(0);
+            panel2.Size = new Size(800, 600);
+            panel2.TabIndex = 0;
+
+            webView_Main.AllowExternalDrop = false;
+            webView_Main.CreationProperties = null;
+            webView_Main.DefaultBackgroundColor = Color.Black;
+            webView_Main.Dock = DockStyle.Fill;
+            webView_Main.Location = new Point(0, 0);
+            webView_Main.Margin = new Padding(0);
+            webView_Main.Name = "webView_Main";
+            webView_Main.Size = new Size(800, 600);
+            webView_Main.TabIndex = 0;
+            webView_Main.ZoomFactor = 1D;
+
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(800, 600);
+            Controls.Add(panel2);
+            Margin = new Padding(0);
+            Name = "GameUI2";
+            Text = "RouletteDisplay";
+            Load += Form1_Load;
+
+            panel2.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)webView_Main).EndInit();
+            ResumeLayout(false);
+        }
 
         internal GameUI2(IRouletteMonitor? rouletteMonitor = null)
         {

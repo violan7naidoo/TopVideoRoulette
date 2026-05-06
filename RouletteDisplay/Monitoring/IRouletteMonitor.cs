@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace TestHarnessV2.Monitoring
+namespace RouletteDisplay.Monitoring
 {
     internal interface IRouletteMonitor : IAsyncDisposable
     {

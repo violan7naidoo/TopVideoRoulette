@@ -3,6 +3,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
+    <AssemblyName>RouletteDisplay</AssemblyName>
+    <RootNamespace>RouletteDisplay</RootNamespace>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -27,7 +29,7 @@
     <EmbeddedResource Update="GameUI.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>GameUI.Designer.cs</LastGenOutput>
-      <LogicalName>TestHarnessV2.GameUI2.resources</LogicalName>
+      <LogicalName>RouletteDisplay.GameUI2.resources</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 

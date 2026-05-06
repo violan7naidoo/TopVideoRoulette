@@ -1,6 +1,6 @@
 using System;
 
-namespace TestHarnessV2.Monitoring
+namespace RouletteDisplay.Monitoring
 {
     internal sealed class RefreshRequest
     {

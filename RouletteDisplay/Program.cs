@@ -1,7 +1,7 @@
-using TestHarnessV2.Monitoring;
-using TestHarnessV2.WebSocket;
+using RouletteDisplay.Monitoring;
+using RouletteDisplay.WebSocket;
 
-namespace TestHarnessV2
+namespace RouletteDisplay
 {
     internal static class Program
     {

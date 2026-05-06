@@ -3,7 +3,7 @@ using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace TestHarnessV2.WebSocket
+namespace RouletteDisplay.WebSocket
 {
     internal interface IWebSocketClient : IAsyncDisposable
     {

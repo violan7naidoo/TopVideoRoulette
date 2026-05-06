@@ -4,7 +4,7 @@ using System.IO;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 
-namespace TestHarnessV2
+namespace RouletteDisplay
 {
     /// <summary>
     /// Intercepts video requests to localhost:5005/Videos/... and serves files from local disk.

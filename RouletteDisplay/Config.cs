@@ -4,7 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows.Forms;
 
-namespace TestHarnessV2
+namespace RouletteDisplay
 {
     internal sealed class AppSettings
     {

@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace TestHarnessV2.WebSocket
+namespace RouletteDisplay.WebSocket
 {
     internal sealed class ClientWebSocketAdapter : IWebSocketClient
     {

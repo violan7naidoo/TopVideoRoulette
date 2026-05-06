@@ -1,9 +1,9 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using TestHarnessV2.WebSocket;
+using RouletteDisplay.WebSocket;
 
-namespace TestHarnessV2.Monitoring
+namespace RouletteDisplay.Monitoring
 {
     internal sealed class RouletteSocketMonitor : IRouletteMonitor
     {

@@ -1,4 +1,4 @@
-namespace TestHarnessV2.Monitoring
+namespace RouletteDisplay.Monitoring
 {
     internal interface IRefreshCoordinator
     {

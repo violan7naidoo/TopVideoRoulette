@@ -1,7 +1,7 @@
 using System;
 using System.Text.Json;
 
-namespace TestHarnessV2.Monitoring
+namespace RouletteDisplay.Monitoring
 {
     internal enum RouletteEventType
     {

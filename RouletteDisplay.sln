@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.13.35931.197 d17.13
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestHarnessV2", "TestHarnessV2\TestHarnessV2.csproj", "{9A670510-C3C2-4184-B3F1-FBCBFEA5993A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RouletteDisplay", "RouletteDisplay\RouletteDisplay.csproj", "{9A670510-C3C2-4184-B3F1-FBCBFEA5993A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
