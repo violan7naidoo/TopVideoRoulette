@@ -20,6 +20,24 @@ namespace TestHarnessV2
 
         /// <summary>Refresh if now is in [scheduled, scheduled + this many minutes). Should be ≥ polling interval.</summary>
         public int ScheduledUrlRefreshWindowMinutes { get; set; } = 2;
+
+        /// <summary>When true, monitor the local roulette websocket for missing round_result events.</summary>
+        public bool WebSocketMonitorEnabled { get; set; } = true;
+
+        /// <summary>Dedicated local websocket endpoint used for display monitoring.</summary>
+        public string WebSocketUrl { get; set; } = "ws://localhost:5005/ws/roulette";
+
+        /// <summary>Seconds to wait before retrying a failed websocket connection.</summary>
+        public int WebSocketReconnectDelaySeconds { get; set; } = 5;
+
+        /// <summary>Seconds without round_result after the game has started before refresh is requested.</summary>
+        public int RoundResultTimeoutSeconds { get; set; } = 90;
+
+        /// <summary>Prevents repeated reloads while the frontend remains unhealthy.</summary>
+        public int RefreshCooldownSeconds { get; set; } = 300;
+
+        /// <summary>Only arm the timeout after at least one round_result has been observed.</summary>
+        public bool RequireFirstRoundResultBeforeRefresh { get; set; } = true;
     }
 
     internal static class AppConfig

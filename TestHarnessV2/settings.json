@@ -4,6 +4,12 @@
   "ScheduledUrlRefreshEnabled": true,
   "ScheduledUrlRefreshTimes": [ "01:04", "07:15" ],
   "ScheduledUrlRefreshWindowMinutes": 2,
+  "WebSocketMonitorEnabled": true,
+  "WebSocketUrl": "ws://localhost:5005/ws/roulette",
+  "WebSocketReconnectDelaySeconds": 5,
+  "RoundResultTimeoutSeconds": 90,
+  "RefreshCooldownSeconds": 300,
+  "RequireFirstRoundResultBeforeRefresh": true,
   "VideoRoots": [
     "Videos\\TopView",
     "Videos\\SideView",

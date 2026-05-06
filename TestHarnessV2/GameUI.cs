@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
+using TestHarnessV2.Monitoring;
 
 namespace TestHarnessV2
 {
@@ -60,7 +61,7 @@ namespace TestHarnessV2
             }
         }
 
-        public static void LogError(string message, Exception ex = null)
+        public static void LogError(string message, Exception? ex = null)
         {
             var errorMessage = $"[ERROR] {message}";
             if (ex != null) errorMessage += $": {ex.Message}\r\nStack Trace: {ex.StackTrace}";
@@ -104,20 +105,24 @@ namespace TestHarnessV2
         private const int CacheClearIntervalMs = 2 * 60 * 60 * 1000; // 2 hours
         private const int HealthLogIntervalMs = 15 * 60 * 1000; // 15 minutes
         private const int ScheduledUrlRefreshPollIntervalMs = 60 * 1000; // 1 minute — checks often enough to hit 01:04 / 07:15 closely
-        private System.Windows.Forms.Timer _cacheClearTimer;
-        private System.Windows.Forms.Timer _zoomLogTimer;
-        private System.Windows.Forms.Timer _healthLogTimer;
-        private System.Windows.Forms.Timer _scheduledUrlRefreshTimer;
+        private System.Windows.Forms.Timer? _cacheClearTimer;
+        private System.Windows.Forms.Timer? _zoomLogTimer;
+        private System.Windows.Forms.Timer? _healthLogTimer;
+        private System.Windows.Forms.Timer? _scheduledUrlRefreshTimer;
         private double _lastLoggedZoomFactor = double.NaN;
         private readonly Video _video;
+        private readonly IRouletteMonitor? _rouletteMonitor;
 
         private DateTime _scheduleRefreshFlagsDay = DateTime.MinValue.Date;
         private readonly List<bool> _scheduleSlotRefreshedToday = new List<bool>();
 
-        public GameUI2()
+        internal GameUI2(IRouletteMonitor? rouletteMonitor = null)
         {
             InitializeComponent();
             _video = new Video(webView_Main);
+            _rouletteMonitor = rouletteMonitor;
+            if (_rouletteMonitor != null)
+                _rouletteMonitor.RefreshRequested += RouletteMonitor_RefreshRequested;
 
             try { this.Icon = new Icon(Path.Combine(Application.StartupPath, "images", "gameonstudios.ico")); } catch { }
             this.ShowIcon = true;
@@ -198,6 +203,7 @@ namespace TestHarnessV2
             panel2.BringToFront();
             webView_Main.Dock = DockStyle.Fill;
             webView_Main.Visible = true;
+            _rouletteMonitor?.Start();
             InitializeWebView2();
         }
 
@@ -316,9 +322,8 @@ namespace TestHarnessV2
                     var end = start.AddMinutes(windowMinutes);
                     if (now >= start && now < end)
                     {
-                        core.Reload();
                         _scheduleSlotRefreshedToday[i] = true;
-                        Logger.Log($"[SCHEDULE] WebView Reload for daily slot {i} ({times[i]} local), window={windowMinutes}m");
+                        ReloadWebView($"Scheduled reload for daily slot {i} ({times[i]} local), window={windowMinutes}m");
                     }
                 }
             }
@@ -429,6 +434,68 @@ namespace TestHarnessV2
             {
                 Logger.LogError("[HEALTH] Failed to log health snapshot.", ex);
             }
+        }
+
+        private void RouletteMonitor_RefreshRequested(object? sender, RefreshRequest request)
+        {
+            if (IsDisposed)
+                return;
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(() => ReloadWebView($"WebSocket monitor requested refresh. {request.Reason}")));
+                return;
+            }
+
+            ReloadWebView($"WebSocket monitor requested refresh. {request.Reason}");
+        }
+
+        private void ReloadWebView(string reason)
+        {
+            var coreWebView2 = webView_Main?.CoreWebView2;
+            if (coreWebView2 == null)
+            {
+                Logger.Log($"[REFRESH] Reload requested before WebView2 was ready. Reason: {reason}");
+                return;
+            }
+
+            try
+            {
+                Logger.Log($"[REFRESH] Reloading WebView2. Reason: {reason}");
+                coreWebView2.Reload();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("[REFRESH] Failed to reload WebView2.", ex);
+            }
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            _cacheClearTimer?.Stop();
+            _zoomLogTimer?.Stop();
+            _healthLogTimer?.Stop();
+            _scheduledUrlRefreshTimer?.Stop();
+
+            _cacheClearTimer?.Dispose();
+            _zoomLogTimer?.Dispose();
+            _healthLogTimer?.Dispose();
+            _scheduledUrlRefreshTimer?.Dispose();
+
+            if (_rouletteMonitor != null)
+            {
+                _rouletteMonitor.RefreshRequested -= RouletteMonitor_RefreshRequested;
+                try
+                {
+                    _rouletteMonitor.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError("[WS-MONITOR] Failed to shut down websocket monitor cleanly.", ex);
+                }
+            }
+
+            base.OnFormClosing(e);
         }
     }
 }
